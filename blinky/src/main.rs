@@ -10,9 +10,10 @@ const HEAP_SIZE: usize = 1024 * 64; // in bytes
 use alloc_cortex_m::CortexMHeap;
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{self, AnyPin};
+use embassy_rp::gpio::{self, AnyPin, Pull};
 use embassy_time::{Duration, Timer};
 use gpio::{Level, Output};
+use rand::{Rng, SeedableRng};
 use range_set_blaze::{RangeMapBlaze, RangeSetBlaze};
 use {defmt_rtt as _, panic_probe as _}; // Adjust the import path according to your setup
 
@@ -36,20 +37,57 @@ async fn main(_spawner: Spawner) {
         gpio::Output::new(p.PIN_7, Level::High),
     ];
 
-    let mut movie_index = 0;
-    loop {
-        let movie = &compiled_movies[movie_index];
-        movie_index = (movie_index + 1) % compiled_movies.len();
+    let input_0 = gpio::Input::new(p.PIN_14, Pull::Down);
+    let input_1 = gpio::Input::new(p.PIN_15, Pull::Down);
 
-        for range_values in movie.range_values() {
-            let frame = *range_values.value;
-            set_pin_levels(&mut pins, frame);
-            let (start, end) = range_values.range.into_inner();
-            let frame_count = (end + 1 - start) as u64;
-            let duration = Duration::from_millis(frame_count * 1000 / FPS as u64);
-            Timer::after(duration).await;
+    // let mut rng = SmallRng::from_entropy();
+    // let random_seconds = rng.gen_range(1..=5);
+    let random_seconds = 3;
+    Timer::after(Duration::from_secs(random_seconds as u64)).await;
+
+    if input_0.is_high() {
+        set_pin_levels(&mut pins, Leds::ASCII_TABLE['b' as usize]);
+        loop {}
+    }
+    if input_1.is_high() {
+        set_pin_levels(&mut pins, Leds::ASCII_TABLE['c' as usize]);
+        loop {}
+    }
+
+    set_pin_levels(&mut pins, Leds::SPACE);
+    loop {
+        if input_0.is_high() {
+            set_pin_levels(&mut pins, Leds::ASCII_TABLE['c' as usize]);
+            break;
+        }
+        if input_1.is_high() {
+            set_pin_levels(&mut pins, Leds::ASCII_TABLE['b' as usize]);
+            break;
         }
     }
+    loop {}
+
+    // let mut movie_index = 0;
+    // loop {
+    //     // pins[0].set_level(Level::Low);
+    //     // pins[1].set_level(Level::High);
+    //     // pins[2].set_level(input_pin.is_high().into());
+    //     // Timer::after(Duration::from_millis(100)).await;
+
+    //     while !input_pin.is_high() {}
+
+    //     let movie = &compiled_movies[movie_index];
+    //     movie_index = (movie_index + 1) % compiled_movies.len();
+
+    //     for range_values in movie.range_values() {
+    //         let frame = *range_values.value;
+    //         set_pin_levels(&mut pins, frame);
+    //         let (start, end) = range_values.range.into_inner();
+    //         let frame_count = (end + 1 - start) as u64;
+    //         let duration = Duration::from_millis(frame_count * 1000 / FPS as u64);
+    //         Timer::after(duration).await;
+    //     }
+    // }
 }
 
 fn set_pin_levels(pins: &mut [gpio::Output; 8], value: u8) {
