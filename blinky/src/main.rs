@@ -11,11 +11,13 @@ use alloc_cortex_m::CortexMHeap;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{self, AnyPin, Pull};
+use embassy_time::Instant;
 use embassy_time::{Duration, Timer};
 use gpio::{Level, Output};
+use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use range_set_blaze::{RangeMapBlaze, RangeSetBlaze};
-use {defmt_rtt as _, panic_probe as _}; // Adjust the import path according to your setup
+use {defmt_rtt as _, panic_probe as _}; // Adjust the import path according to your setup //
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -39,33 +41,47 @@ async fn main(_spawner: Spawner) {
 
     let input_0 = gpio::Input::new(p.PIN_14, Pull::Down);
     let input_1 = gpio::Input::new(p.PIN_15, Pull::Down);
-
-    // let mut rng = SmallRng::from_entropy();
-    // let random_seconds = rng.gen_range(1..=5);
-    let random_seconds = 3;
-    Timer::after(Duration::from_secs(random_seconds as u64)).await;
-
-    if input_0.is_high() {
-        set_pin_levels(&mut pins, Leds::ASCII_TABLE['b' as usize]);
-        loop {}
-    }
-    if input_1.is_high() {
-        set_pin_levels(&mut pins, Leds::ASCII_TABLE['c' as usize]);
-        loop {}
-    }
-
-    set_pin_levels(&mut pins, Leds::SPACE);
     loop {
+        // loop until both buttons are down
+        while input_0.is_low() || input_1.is_low() {}
+
+        let mut rng = SmallRng::from_seed((Instant::now().as_ticks() as u128).to_ne_bytes());
+        let random_seconds = rng.gen_range(1..=10);
+        set_pin_levels(&mut pins, Leds::DIGITS[random_seconds as usize]);
+        Timer::after(Duration::from_secs(random_seconds as u64)).await;
+
         if input_0.is_high() {
-            set_pin_levels(&mut pins, Leds::ASCII_TABLE['c' as usize]);
-            break;
+            set_pin_levels(
+                &mut pins,
+                Leds::ASCII_TABLE['b' as usize] | Leds::ASCII_TABLE['.' as usize],
+            );
+            Timer::after(Duration::from_secs(3)).await;
+            continue;
         }
         if input_1.is_high() {
-            set_pin_levels(&mut pins, Leds::ASCII_TABLE['b' as usize]);
-            break;
+            set_pin_levels(
+                &mut pins,
+                Leds::ASCII_TABLE['c' as usize] | Leds::ASCII_TABLE['.' as usize],
+            );
+            Timer::after(Duration::from_secs(3)).await;
+            continue;
         }
+
+        set_pin_levels(&mut pins, Leds::SPACE);
+        loop {
+            if input_0.is_high() {
+                set_pin_levels(&mut pins, Leds::ASCII_TABLE['c' as usize]);
+                break;
+            }
+            if input_1.is_high() {
+                set_pin_levels(&mut pins, Leds::ASCII_TABLE['b' as usize]);
+                break;
+            }
+        }
+
+        Timer::after(Duration::from_secs(3)).await;
+        set_pin_levels(&mut pins, Leds::ASCII_TABLE['-' as usize]);
     }
-    loop {}
 
     // let mut movie_index = 0;
     // loop {
